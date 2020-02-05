@@ -114,28 +114,25 @@ steps:
 
   - script: |
       set -e
+      set -o pipefail
+
       pushd ../azuredatastudio-darwin
       ls
 
       echo "Cleaning the application"
-      cd *.app
-      find . -name '._*' -o -iname '.DS_Store' -o -iname '__MACOSX' -print0 | xargs -0 rm -rf --
-      cd ..
+      find *.app -name '._*' -o -iname '.DS_Store' -o -iname '__MACOSX' -print0 | xargs -0 rm -rf --
 
-      echo "Signing the application with deep"
-      codesign --deep --force --timestamp --options runtime --entitlements $(Build.SourcesDirectory)/build/azure-pipelines/darwin/entitlements.xml -s LPV3BJJYXS *.app
+      echo "Signing Mach-O binaries"
+      find *.app -type f -print0 | xargs -0 file | grep ':  *Mach-O' | sed 's/:  *Mach-O.*//' | while read -r file; do
+            codesign --force --timestamp --options runtime --entitlements '$(Build.SourcesDirectory)/build/azure-pipelines/darwin/entitlements.xml' -s LPV3BJJYXS "$file"
+      done
 
-      cd *.app
-      ls
-      echo "Signing specific components"
-      find . -type f -print0 | xargs -0 file | grep ':  *Mach-O' | sed 's/:  *Mach-O.*//' | while read -r file; do codesign --options runtime --timestamp --entitlements $(Build.SourcesDirectory)/build/azure-pipelines/darwin/entitlements.xml -s LPV3BJJYXS --force "$file" || break; done
+      echo "Signing frameworks"
+      codesign --force --timestamp --options runtime --entitlements '$(Build.SourcesDirectory)/build/azure-pipelines/darwin/entitlements.xml' -s LPV3BJJYXS *.app/Contents/Frameworks/*.framework
 
-      echo "Signing Electron again..."
-      codesign --force --timestamp --options runtime --entitlements $(Build.SourcesDirectory)/build/azure-pipelines/darwin/entitlements.xml -s LPV3BJJYXS Contents/Frameworks/Electron\ Framework.framework
-      cd ..
+      echo "Signing the app"
+      codesign --force --timestamp --options runtime --entitlements '$(Build.SourcesDirectory)/build/azure-pipelines/darwin/entitlements.xml' -s LPV3BJJYXS *.app
 
-      echo "Signing the entire application one more time"
-      codesign --force --timestamp --options runtime --entitlements $(Build.SourcesDirectory)/build/azure-pipelines/darwin/entitlements.xml -s LPV3BJJYXS *.app
       popd
     displayName: 'Manual codesign'
 
